@@ -1,0 +1,121 @@
+{
+  "name": "@tayor/prompter",
+  "version": "0.1.0",
+  "description": "Self-hosted Prompter app and CLI for prompts, workflows, tasks, and schedules.",
+  "license": "MIT",
+  "author": "tayor",
+  "homepage": "https://www.npmjs.com/package/@tayor/prompter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tayor/prompter.git"
+  },
+  "keywords": [
+    "prompter",
+    "prompt-management",
+    "workflow",
+    "nextjs",
+    "prisma",
+    "sqlite",
+    "cli",
+    "kanban"
+  ],
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "README.md",
+    "bin",
+    "middleware.ts",
+    "next.config.ts",
+    "postcss.config.mjs",
+    "prisma",
+    "prisma.config.ts",
+    "public",
+    "src",
+    "tsconfig.json",
+    "components.json",
+    "eslint.config.mjs"
+  ],
+  "bin": {
+    "prompter": "./bin/prompter.mjs"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "postinstall": "node ./bin/postinstall.mjs",
+    "lint": "eslint",
+    "cli": "node ./bin/prompter.mjs",
+    "pretest": "prisma generate",
+    "test": "node --import tsx --test --test-concurrency=1 src/lib/*.test.ts src/lib/kanban/*.test.ts src/lib/services/*.test.ts src/cli/*.test.ts",
+    "prepublishOnly": "npm run lint && npm test && npm run build",
+    "db:init": "tsx prisma/seed.ts",
+    "db:migrate": "npm run db:init",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@hookform/resolvers": "^5.2.2",
+    "@libsql/client": "^0.17.2",
+    "@prisma/adapter-libsql": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slider": "^1.3.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@tailwindcss/typography": "^0.5.19",
+    "bcryptjs": "^3.0.3",
+    "chokidar": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
+    "jose": "^6.2.2",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.3",
+    "next-themes": "^0.4.6",
+    "prisma": "^7.7.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "react-hook-form": "^7.72.1",
+    "react-markdown": "^10.1.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.3",
+    "tailwindcss": "^4.2.2",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "^6.0.2"
+  }
+}

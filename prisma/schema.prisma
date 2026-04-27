@@ -1,0 +1,389 @@
+// Prompter - Prisma Schema
+// Core models for AI prompt/workflow and Bash-Kanban management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================
+// BASH KANBAN MODELS
+// ============================================
+
+enum KanbanColumn {
+  backlog
+  queued
+  running
+  completed
+  failed
+  paused
+}
+
+enum KanbanExecutionStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum KanbanExecutionTrigger {
+  manual
+  auto
+  retry
+  random
+}
+
+enum KanbanScheduleType {
+  one_time
+  cron
+}
+
+enum KanbanScheduleStatus {
+  active
+  paused
+}
+
+model KanbanTask {
+  id           String       @id @default(cuid())
+  name         String
+  displayName  String?
+  description  String?
+  sourcePath   String
+  sourceHash   String?
+  column       KanbanColumn @default(backlog)
+  position     Int          @default(0)
+  config       String       @default("{}") // JSON object with task config
+  dependencies String       @default("[]") // JSON array of task IDs
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  executions   KanbanExecution[]
+  schedules    KanbanSchedule[]
+
+  @@index([column, position])
+  @@unique([column, position])
+  @@index([sourcePath])
+}
+
+model KanbanExecution {
+  id             String                 @id @default(cuid())
+  status         KanbanExecutionStatus  @default(pending)
+  pid            Int?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  durationMs     Int?
+  exitCode       Int?
+  logFile        String?
+  configSnapshot String                 // JSON snapshot of task config at execution time
+  trigger        KanbanExecutionTrigger @default(manual)
+  error          String?
+  createdAt      DateTime               @default(now())
+
+  taskId         String
+  task           KanbanTask             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([status, createdAt])
+}
+
+model KanbanSchedule {
+  id                  String               @id @default(cuid())
+  name                String?
+  type                KanbanScheduleType
+  runAt               DateTime?
+  cronExpression      String?
+  timezone            String               @default("UTC")
+  status              KanbanScheduleStatus @default(active)
+  nextRunAt           DateTime?
+  lastRunAt           DateTime?
+  allowConcurrentRuns Boolean              @default(false)
+  skipIfTaskRunning   Boolean              @default(true)
+  catchUpMissedRuns   Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  taskId              String?
+  task                KanbanTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextRunAt])
+  @@index([type, status])
+  @@index([taskId, status])
+  @@index([runAt])
+}
+
+model KanbanAppConfig {
+  key       String   @id
+  value     String   // JSON-encoded config/settings payload
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+// ============================================
+// ADMIN MODEL
+// ============================================
+
+model Admin {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ============================================
+// PROMPT MODELS
+// ============================================
+
+model Prompt {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  description String?
+  variables   String?   // JSON array: ["topic", "tone", "length"]
+  aiModel     String?   // Target AI model (gpt-4, claude-3, etc.)
+  category    String    @default("user") // system, user, assistant
+  usageCount  Int       @default(0)
+  rating      Int?      // 1-5 effectiveness rating
+  isFavorite  Boolean   @default(false)
+  isPinned    Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastUsedAt  DateTime?
+
+  // Relations
+  folderId      String?
+  folder        Folder?         @relation(fields: [folderId], references: [id])
+  tags          TagsOnPrompts[]
+  versions      PromptVersion[]
+  workflowSteps WorkflowStep[]
+
+  @@index([title])
+  @@index([folderId])
+  @@index([isArchived])
+  @@index([isFavorite])
+}
+
+model PromptVersion {
+  id          String   @id @default(cuid())
+  content     String
+  variables   String?  // JSON array of variables at this version
+  version     Int
+  changeNote  String?  // Commit message
+  createdAt   DateTime @default(now())
+  
+  promptId    String
+  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId])
+  @@unique([promptId, version])
+}
+
+// ============================================
+// WORKFLOW MODELS
+// ============================================
+
+model Workflow {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  icon        String?   // Emoji or icon identifier
+  color       String?   // Hex color for UI
+  isTemplate  Boolean   @default(false) // Mark as reusable template
+  isFavorite  Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+  runCount    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastRunAt   DateTime?
+
+  // Input schema for the workflow
+  inputSchema String?   // JSON: [{"name": "topic", "type": "text", "required": true}]
+  
+  // Relations
+  folderId    String?
+  folder      Folder?          @relation(fields: [folderId], references: [id])
+  steps       WorkflowStep[]
+  tags        TagsOnWorkflows[]
+  runs        WorkflowRun[]
+  versions    WorkflowVersion[]
+
+  @@index([name])
+  @@index([folderId])
+  @@index([isTemplate])
+}
+
+model WorkflowStep {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  order           Int       // Execution order (0, 1, 2, ...)
+  
+  // Step can use existing prompt OR have inline content
+  promptId        String?
+  prompt          Prompt?   @relation(fields: [promptId], references: [id])
+  inlineContent   String?   // Alternative: inline prompt content
+  
+  // Variable mapping
+  inputMapping    String?   // JSON: {"topic": "{{input.topic}}", "context": "{{step1.output}}"}
+  outputVariable  String    // Name for this step's output: "summary", "draft", etc.
+  
+  // Execution control
+  isOptional      Boolean   @default(false)
+  condition       String?   // JSON: {"field": "step1.output", "operator": "contains", "value": "error"}
+  
+  // AI Model override (optional, otherwise uses prompt's model)
+  aiModelOverride String?
+  
+  // Metadata
+  notes           String?   // Documentation for this step
+  estimatedTokens Int?      // Rough token estimate
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  workflowId      String
+  workflow        Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // Branching support
+  nextStepOnSuccess String? // Step ID to go to on success
+  nextStepOnFailure String? // Step ID to go to on failure (optional)
+
+  @@index([workflowId])
+  @@index([order])
+  @@unique([workflowId, order])
+}
+
+model WorkflowVersion {
+  id          String   @id @default(cuid())
+  version     Int
+  snapshot    String   // JSON snapshot of entire workflow + steps
+  changeNote  String?
+  createdAt   DateTime @default(now())
+  
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@unique([workflowId, version])
+}
+
+model WorkflowRun {
+  id          String   @id @default(cuid())
+  status      String   @default("pending") // pending, running, completed, failed, cancelled
+  inputs      String?  // JSON of input values
+  outputs     String?  // JSON of all step outputs
+  currentStep Int      @default(0)
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  error       String?
+  
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  stepRuns    WorkflowStepRun[]
+
+  @@index([workflowId])
+  @@index([status])
+}
+
+model WorkflowStepRun {
+  id            String    @id @default(cuid())
+  stepOrder     Int
+  stepName      String
+  status        String    @default("pending") // pending, running, completed, skipped, failed
+  resolvedPrompt String?  // The actual prompt after variable substitution
+  output        String?   // User-provided output for this step
+  startedAt     DateTime?
+  completedAt   DateTime?
+  
+  runId         String
+  run           WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+// ============================================
+// ORGANIZATION MODELS
+// ============================================
+
+model Folder {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String?  // Emoji or icon
+  color     String?  // Hex color for UI
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Self-relation for nested folders
+  parentId  String?
+  parent    Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  Folder[] @relation("FolderHierarchy")
+  
+  // Contents
+  prompts   Prompt[]
+  workflows Workflow[]
+
+  @@index([parentId])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String?  // Hex color for UI
+  createdAt DateTime @default(now())
+  
+  prompts   TagsOnPrompts[]
+  workflows TagsOnWorkflows[]
+}
+
+model TagsOnPrompts {
+  promptId  String
+  tagId     String
+  prompt    Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  tag       Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([promptId, tagId])
+}
+
+model TagsOnWorkflows {
+  workflowId String
+  tagId      String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([workflowId, tagId])
+}
+
+// ============================================
+// SETTINGS & ANALYTICS
+// ============================================
+
+model Settings {
+  id               String   @id @default("settings")
+  theme            String   @default("system") // light, dark, system
+  defaultAiModel   String?
+  customAiModels   String?  // JSON array of custom AI models
+  sidebarCollapsed Boolean  @default(false)
+  editorFontSize   Int      @default(14)
+  autoSaveInterval Int      @default(30) // seconds
+  updatedAt        DateTime @updatedAt
+}
+
+model Analytics {
+  id          String   @id @default(cuid())
+  entityType  String   // prompt, workflow
+  entityId    String
+  action      String   // view, copy, run, edit
+  metadata    String?  // JSON additional data
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
